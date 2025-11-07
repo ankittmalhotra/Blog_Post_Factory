@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog Post Factory</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Blog Post Factory</h1>
+        <form id="blog-post-form">
+            <textarea name="topic" placeholder="Enter your blog post topic here..." rows="5"></textarea>
+            <button type="submit">Generate Blog Post</button>
+        </form>
+        <div id="status-container">
+            <!-- Status updates will be displayed here -->
+        </div>
+        <div id="blog-post-output">
+            <!-- Blog post will be displayed here -->
+        </div>
+    </div>
+    <script>
+        document.getElementById('blog-post-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const topic = event.target.elements.topic.value;
+            const blogPostOutput = document.getElementById('blog-post-output');
+            const statusContainer = document.getElementById('status-container');
+            
+            blogPostOutput.innerHTML = '';
+            statusContainer.innerHTML = '<p><strong>Status:</strong> Processing...</p><p><strong>Step:</strong> Initializing...</p>';
+
+            const eventSource = new EventSource(`/generate?topic=${encodeURIComponent(topic)}`);
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'status_update') {
+                    statusContainer.innerHTML = `<p><strong>Status:</strong> ${data.status}</p><p><strong>Step:</strong> ${data.step}</p>`;
+                } else if (data.type === 'post_update') {
+                    // Append new content for a streaming effect
+                    blogPostOutput.textContent += data.content;
+                } else if (data.type === 'end') {
+                    statusContainer.innerHTML = '<strong>Status:</strong> Complete!';
+                    eventSource.close();
+                }
+            };
+
+            eventSource.onerror = function(err) {
+                console.error("EventSource failed:", err);
+                statusContainer.innerHTML = '<strong>Error:</strong> Could not connect to the server.';
+                eventSource.close();
+            };
+        });
+    </script>
+</body>
+</html>

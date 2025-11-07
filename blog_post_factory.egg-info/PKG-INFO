@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: blog-post-factory
+Version: 0.1.0
+Summary: A multi-agent system for creating blog posts.
+Author-email: Gemini <gemini@google.com>
+Requires-Python: >=3.8
+Requires-Dist: langgraph
+Requires-Dist: duckduckgo-search
+Requires-Dist: langchain-community
