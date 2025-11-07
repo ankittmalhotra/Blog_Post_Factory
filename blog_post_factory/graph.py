@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 from langchain_core.tools import tool
 from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
 from typing import TypedDict
@@ -36,6 +37,7 @@ class State(
     research: list[str]
     summarized_research: str
     post: str
+    revision_needed: bool
 
 
 def planner(state: State):
@@ -144,13 +146,31 @@ def writer(state: State):
 def reviewer(state:State):
     logging.info("Reviewing the blog post...")
     yield {"status": "Reviewing", "current_step": "Starting review of blog post"}
-    prompt = f"""Proofread and polish the following blog post to make it publication-ready.
+    prompt = f"""You are a senior editor reviewing a blog post. 
+
+    Your task is to proofread and polish the following blog post to make it publication-ready.
     Correct any grammatical errors, improve clarity, and ensure a professional tone suitable for a live website.
-    Do not add any introductory or concluding remarks, questions, or your own opinions. Only output the final, polished blog post text.
+
+    Also, you need to decide if the post is ready to be published or if it needs another round of research and writing. 
+    A post needs revision if the plan is not well-executed or if the research seems insufficient.
+
+    Output a JSON object with two keys: "review_feedback" and "revision_needed".
+    - "review_feedback": The polished blog post.
+    - "revision_needed": A boolean value (true or false).
+
+    Do not add any introductory or concluding remarks, questions, or your own opinions. Only output the JSON object.
 
     Blog Post:
     {state['post']}"""
-    review_feedback = get_llm().invoke(prompt).content
+    review_feedback_str = get_llm().invoke(prompt).content
+    
+    # Sanitize the output to get a valid JSON
+    # The model sometimes returns the JSON wrapped in markdown
+    if review_feedback_str.startswith("```json"):
+        review_feedback_str = review_feedback_str[7:-4]
+
+    review_feedback = json.loads(review_feedback_str)
+    
     logging.info(f"Review feedback: {review_feedback}")
 
     # Define the output directory for reviews
@@ -163,9 +183,16 @@ def reviewer(state:State):
     file_path = os.path.join(output_dir, f"{sanitized_topic}_review.txt")
 
     with open(file_path, "w") as f:
-        f.write(review_feedback)
+        f.write(review_feedback["review_feedback"])
     logging.info(f"Review feedback saved to {file_path}")
-    yield {"status": "Review complete"}
+    yield {"status": "Review complete", "revision_needed": review_feedback["revision_needed"]}
+
+def decider(state: State):
+    if state["revision_needed"]:
+        return "researcher"
+    else:
+        return END
+
 # Graph
 workflow = StateGraph(State)
 workflow.add_node("planner", planner)
@@ -179,7 +206,14 @@ workflow.add_edge("planner", "researcher")
 workflow.add_edge("researcher", "research_summarizer")
 workflow.add_edge("research_summarizer", "writer")
 workflow.add_edge("writer", "reviewer")
-workflow.add_edge("reviewer", END)
+workflow.add_conditional_edges(
+    "reviewer",
+    decider,
+    {
+        "researcher": "researcher",
+        END: END
+    }
+)
  
 graph_app = workflow.compile()
 

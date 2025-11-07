@@ -14,7 +14,8 @@ The blog post generation process is defined as a graph of nodes, where each node
 2.  **Researcher:** Searches for information on the topic using the DuckDuckGo search API.
 3.  **Research Summarizer:** Summarizes the research results to extract the key information.
 4.  **Writer:** Writes the blog post based on the plan and the summarized research.
-5.  **Reviewer:** Proofreads and polishes the blog post.
+5.  **Reviewer:** Proofreads and polishes the blog post. It also decides if the post is ready to be published or if it needs another round of research and writing.
+6.  **Decider:** Based on the reviewer's feedback, this node decides whether to send the post back for more research or to finish the process.
 
 The application uses the `gemma3:4b` model from Ollama by default, but this can be configured in the `blog_post_factory/graph.py` file.
 
@@ -28,9 +29,11 @@ graph TD
     D --> E[Research Summarizer Agent];
     E --> F[Writer Agent];
     F --> G[Reviewer Agent];
-    G --> H[Generated Blog Post];
-    H --> B;
-    B --> I[User Interface];
+    G --> H{Decider};
+    H -- Revision Needed --> D;
+    H -- Approved --> I[Generated Blog Post];
+    I --> B;
+    B --> J[User Interface];
 ```
 
 ## Installation
